@@ -1,0 +1,523 @@
+// vector.NoCo
+module vector
+
+class Vector<T> {
+    have {
+        num[] data;
+        num size;
+        num capacity;
+        node put;
+        node get;
+        node take;
+        node [];
+    }
+    node put {
+        in {T the_data};
+        out {void};
+        action {
+            if size >= capacity
+            +> {
+                capacity = capacity * 2;
+                new_data = new num[capacity];
+                loop {
+                    born {num order = 0};
+                    if order < size
+                    +> {
+                        new_data[order] = data[order];
+                        order = order + 1;
+                    }
+                    -> {
+                        data = new_data;
+                        break 1;
+                    }
+                }
+            }
+        };
+    }
+    node [] {
+        in {num index};
+        out {T result};
+        action {
+            result = data[index];
+        };
+    }
+}
+
+
+// group.NoCo
+module group
+
+class Group<T> {
+    have {
+        Vector<T> the; // 使用Vector替代C++的vector
+        num _size; // 元素数量
+        Map<string, num> fast; // ID到索引的快速映射
+        Map<num, string> defast; // 索引到ID的反向映射
+        Queue<num> free; // 空闲索引队列
+    }
+    
+    // 受保护方法
+    node registerItem {
+        in {string ID, num index};
+        out {void};
+        action {
+            if fast[ID] != null || defast[index] != null
+            +> { return }
+            -> {
+                fast[ID] = index;
+                defast[index] = ID;
+                _size = _size + 1;
+            }
+        }
+    }
+    
+    node unregisterItem {
+        in {string ID};
+        out {bool};
+        action {
+            if fast[ID] == null 
+            +> { return false; }
+            -> {
+                num index = fast[ID];
+                the[index] = T();
+                fast.remove(ID);
+                defast.remove(index);
+                free.push(index); // 将索引加入空闲队列
+                _size = _size - 1;
+                return true;
+            }
+            
+        }
+    }
+    
+    node get_free {
+        out {num};
+        action {
+            if free.size() > 0 
+            loop
+            +> {
+                if free[0] >= _size 
+                +> {
+                    free.pop(); }
+                -> {
+                    return free[0]; }
+            }
+            return -1;
+        }
+    }
+    
+    // 公共方法
+    node put {
+        in {T& tar};
+        out {void};
+        action {
+            num position = get_free();
+            if position == -1 
+            +>{
+                registerItem(tar.ID, the.size());
+                the.push_back(tar); } 
+            -> {
+                free.pop();
+                registerItem(tar.ID, position);
+                the[position] = tar; }
+        }
+    }
+    
+    node submit {
+        in {T& tar};
+        out {bool};
+        action {
+            if fast.find(tar.ID) != null {
+                return false;
+            } else {
+                put(tar);
+                return true;
+            }
+        }
+    }
+    
+    node get {
+        in {string ID};
+        out {T};
+        action {
+            return the[fast[ID]];
+        }
+    }
+    
+    node take {
+        in {string ID};
+        out {T};
+        action {
+            if fast[ID] == null 
+            +> {
+                return T(); }
+            -> {
+                T result = get(ID);
+                free.push(fast[ID]);
+                unregisterItem(ID);
+                return result;
+            }
+        }
+    }
+    
+    node push {
+        in {T tar};
+        out {void};
+        action {
+            registerItem(tar.ID, the.size());
+            the.push_back(tar);
+        }
+    }
+    
+    node pick {
+        out {T};
+        action {
+            assert(_size > 0, "尝试获取空集合的元素");
+            // 先缩短数组确保末尾有效
+            _size = _size - 1;
+            return take(the[_size].ID);
+        }
+    }
+    
+    // 操作符重载（通过方法模拟）
+    node at {
+        in {string ID};
+        out {T&};
+        action {
+            assert(fast[ID] != null, "ID 不存在");
+            return the[fast[ID]];
+        }
+    }
+    
+    node at_index {
+        in {num index};
+        out {T&};
+        action {
+            assert(index < the.size(), "访问的索引不存在");
+            return the[index];
+        }
+    }
+}
+
+// traffic_light.NoCo
+module traffic_light
+
+class TrafficLight {
+    have {
+        enum State { Red, Yellow, Green } current_state;
+        num duration; // 当前状态持续时间
+        node transition; // 状态转换逻辑
+    }
+
+    born {
+        current_state = State.Red; // 初始状态为红灯
+        duration = 0;
+    }
+
+    node transition {
+        in {num elapsed_time} // 输入经过的时间
+        out {State} // 输出新状态
+        
+        action {
+            duration = duration + elapsed_time
+            
+            match current_state {
+                case State.Red: {
+                    if duration >= 60 { // 红灯持续60秒
+                        duration = 0
+                        return State.Green
+                    }
+                }
+                case State.Green: {
+                    if duration >= 45 { // 绿灯持续45秒
+                        duration = 0
+                        return State.Yellow
+                    }
+                }
+                case State.Yellow: {
+                    if duration >= 5 { // 黄灯持续5秒
+                        duration = 0
+                        return State.Red
+                    }
+                }
+            }
+            
+            return current_state // 状态未改变
+        }
+    }
+}
+
+// 安全操作状态机
+class SafeStateMachine {
+    have {
+        TrafficLight light;
+        Option<Error> last_error; // 最后一次错误记录
+        node process_tick; // 处理时间片
+    }
+
+    born {
+        light = new TrafficLight()
+        last_error = None()
+    }
+
+    node process_tick {
+        in {num delta} // 输入时间增量
+        out {Result<State, Error>} // 输出状态或错误
+        
+        action {
+            try {
+                if delta <= 0 {
+                    throw InvalidTimeError("时间增量必须为正数")
+                }
+                
+                State new_state = light.transition(delta)
+                if new_state != light.current_state {
+                    light.current_state = new_state
+                    log_state_change(new_state)
+                }
+                
+                return Ok(light.current_state)
+            } catch error {
+                last_error = Some(error)
+                return Err(error)
+            }
+        }
+    }
+
+    node log_state_change {
+        in {State new_state}
+        action {
+            print("状态变更: ", light.current_state, " -> ", new_state)
+            print("持续时间重置: ", light.duration)
+        }
+    }
+}
+
+// 状态机运行时
+graph traffic_controller {
+    entry (initialize)
+
+    node initialize {
+        action {
+            machine = new SafeStateMachine()
+        }
+        +> run_loop
+    }
+
+    node run_loop {
+        born {num total_time = 0}
+        condition (total_time < 180) // 运行3分钟
+        action {
+            result = machine.process_tick(1) // 每秒处理一次
+            
+            match result {
+                case Ok(state): {
+                    display_state(state)
+                    total_time = total_time + 1
+                }
+                case Err(error): {
+                    handle_error(error)
+                    break
+                }
+            }
+        }
+    }
+}
+
+node display_state {
+    in {State state}
+    action {
+        match state {
+            case State.Red:    { set_led_color("red") }
+            case State.Green:  { set_led_color("green") }
+            case State.Yellow: { set_led_color("yellow") }
+        }
+    }
+}
+
+node handle_error {
+    in {Error error}
+    action {
+        log_error(error.message)
+        activate_safety_mode()
+    }
+}
+
+// order_processing.NoCo
+module order_processing
+
+// 定义核心数据结构
+class Order {
+    have {
+        string id;
+        Product[] items;
+        Payment payment_info;
+        Address shipping_address;
+        node validate;
+        node process_payment;
+        node check_inventory;
+        node fulfill_order;
+    }
+}
+
+class Product {
+    have {
+        string id;
+        string name;
+        num price;
+        num stock_level;
+        node reserve;
+    }
+}
+
+// 核心处理流程
+graph order_fulfillment {
+    entry (validate_order)
+
+    node validate_order {
+        action {
+            result = order.validate()
+            match result {
+                case Ok(): { +> process_payment }
+                case Err(error): { +> handle_validation_error }
+            }
+        }
+    }
+
+    node process_payment {
+        parallel: true // 可指定执行器类型
+        action {
+            result = payment_processor.process(order.payment_info)
+        }
+        +> {
+            match result {
+                case Ok(): { process_order } // node指针
+                case Err(error): { retry_inventory }
+            }
+        }
+    }
+
+    node check_inventory {
+        parallel: true
+        action {
+            all_available = true
+            elem of order.items {
+                if elem < 1
+                +> {
+                    all_available = false
+                    break 1; }
+            }
+            
+            if all_available 
+            +> {
+                +> reserve_inventory; }
+            -> {
+                +> handle_out_of_stock; }
+        }
+    }
+
+    node reserve_inventory {
+        wait_all: {process_payment, check_inventory} // 同步屏障
+        action {
+            item of order.items {
+                item.reserve(1);
+            }
+        }
+        +> prepare_shipment;
+    }
+
+    node prepare_shipment {
+        action {
+            shipment = shipping_system.create_shipment(order)
+            tracking_id = shipment.generate_tracking()
+        }
+        +> update_order_status
+    }
+
+    node update_order_status {
+        action {
+            order.status = "SHIPPED"
+            event_bus.publish("order_shipped", {order_id: order.id})
+        }
+        +> send_confirmation
+    }
+
+    node send_confirmation {
+        action {
+            email_template = load_template("order_confirmation")
+            render_context = {
+                order_id: order.id,
+                tracking_id: tracking_id,
+                total: calculate_total(order.items)
+            }
+            email_service.send(order.customer_email, email_template.render(render_context))
+        }
+    }
+
+    // 错误处理分支
+    node handle_validation_error {
+        action {
+            log.error("订单验证失败: ", error.message)
+            send_error_notification("validation_failed", order.id)
+        }
+    }
+
+    node retry_payment {
+        action {
+            if payment_retries < 3
+            loop
+            +> {
+                payment_retries = payment_retries + 1
+                delay(5000) // 暂停5秒后重试 }
+            -> {
+                log.error("支付重试失败: ", order.id)
+                +> handle_payment_failure }
+        }
+    }
+
+    node handle_payment_failure {
+        action {
+            inventory_rollback()
+            send_error_notification("payment_failed", order.id)
+        }
+    }
+
+    node handle_out_of_stock {
+        action {
+            log.warn("库存不足: ", item.id)
+            send_backorder_notification(item)
+        }
+    }
+}
+
+// 扩展功能实现
+graph parallel_order_processing {
+    entry (start_batch_processing)
+
+    node start_batch_processing {
+        action {
+            orders = order_queue.fetch_pending_orders(100)
+        }
+        parallel: process_orders(orders) // 并行处理订单
+        +> wait_all_orders
+    }
+
+    node process_orders {
+        in {Order[] batch}
+        action {
+            order of batch {
+                run graph order_fulfillment with {order: order} // 图流嵌套调用
+            }
+        }
+    }
+
+    node wait_all_orders {
+        wait_all: [process_orders]
+        action {
+            log.info("批次处理完成，统计结果")
+            success_count = count_successful_orders()
+            failure_count = batch_size - success_count
+            generate_report(success_count, failure_count)
+        }
+    }
+}

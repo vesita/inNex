@@ -1,0 +1,219 @@
+/*
+* 目前属于设想阶段
+* node - node
+* 
+
+
+
+* no被调用时都需要独立声明next，
+
+*/
+
+// ===== 类定义部分 =====
+
+class vector<T> = {
+    have (num size, num pre, T[] data);
+    born {
+        in (num size, num pre)
+        data = new T[pre];
+    } drop {
+        // 自动释放内存
+    }
+}
+
+class stack<T> from vector<T> = {
+    have (num cursor, node push, node pop);
+    
+    define {
+        node push = {
+            // 输入
+            in (T value)
+            // 输出
+            out (void)
+            data[cursor] = value;
+            cursor = cursor + 1;
+        }
+
+        node pop = {
+            out (T)
+            if {
+                ignore (0);
+                condition (cursor > 0);
+                cursor = cursor - 1;
+                return data[cursor];
+            } else {
+                return null;
+            }
+        }
+    }
+}
+
+// ===== 函数定义部分 =====
+
+node read_config = {
+    in (string path);
+    out (string content);
+
+    born {
+        file = os.open(path, "r");
+    } drop {
+        file.close();
+    }
+
+    content = file.read();
+}
+
+node parse_data = {
+    in (string content);
+    out (num[] list);
+
+    // 假设内容为 JSON 格式
+    json = JSON.parse(content);
+    list = json["data"];
+}
+
+node validate_data = {
+    in (num[] list);
+    out (bool valid);
+
+    valid = true;
+
+    loop {
+        // 无视条件执行0次
+        ignore (0);
+        condition (i < list.length);
+        if {
+            // 逻辑上感觉if不应该支持ignore，
+            // 或许能够设计成一种全局ignore，
+            // 目前暂不考虑
+            condition (list[i] <= 0);
+            valid = false;
+            break up;
+        }
+        i = i + 1;
+    }
+}
+
+node multiCondition = {
+    in (num a, num b);
+    out (num c);
+
+    if as l1 {
+        condition (a > 0) - link(l2)
+        condition (b > 0) - link(l3)
+        a = b - a
+    }
+
+    if as l2 {
+        b = a - b
+    }
+
+    if as l3 {
+        a = a - b
+    }
+
+    c = a + b
+}
+
+node count = {
+    loop {
+        born (num a = 0);
+        condition (a < 100);
+        check;
+        a ++;
+    }
+}
+
+node quick_sort = {
+    in (num[] list, num left, num right);
+    out(num[] list);
+
+    num pivot = list[(left + right) / 2];
+
+    loop {
+        // 无视条件执行0次
+        ignore (0);
+        condition (left <= right);
+        loop {
+            ignore (0);
+            condition (list[left] < pivot);
+            left = left + 1;
+        }
+        loop {
+            ignore (0);
+            condition (list[right] > pivot);
+            right = right - 1;
+        }
+
+        if {
+            condition (left <= right);
+            num temp = list[left];
+            list[left] = list[right];
+            list[right] = temp;
+            left = left + 1;
+            right = right - 1;
+        } else {
+            // 可以使用break num 的形式表示跳出几层循环
+            break up;
+        }
+    }
+}
+
+// ===== 图流定义部分 =====
+
+graph data_pipeline {
+    entry (load_data);
+
+    node load_data {
+        action {
+            config_content = read_config("config.json");
+            raw_data = parse_data(config_content);
+        }
+        next: validate_data;
+    }
+
+    node validate_data {
+        action {
+            is_valid = validate_data(raw_data);
+        }
+        on condition (is_valid == true) next process_data;
+        on condition (is_valid == false) next error_handler;
+    }
+
+    node process_data {
+        action {
+            sorted_list = quick_sort(raw_data, 0, raw_data.length - 1);
+            result_stack = new stack<num>();
+            for num in sorted_list {
+                result_stack.push(num);
+            }
+        }
+        next: decision_flow;
+    }
+
+    node decision_flow {
+        action {
+            base_value = result_stack.pop();
+            result_value = multiCondition(base_value, 5);
+        }
+        next: output_result;
+    }
+
+    node output_result {
+        action {
+            print("Result value: ", result_value);
+        }
+    }
+
+    node error_handler {
+        action {
+            print("Invalid data detected!");
+        }
+    }
+}
+
+// ===== 主函数调用图流 =====
+
+node main = {
+    run graph data_pipeline;
+}

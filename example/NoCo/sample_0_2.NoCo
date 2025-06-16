@@ -1,0 +1,213 @@
+// 状态机模块
+module state_machine
+
+// 状态枚举定义
+class State {
+    have {
+        enum Value { Red, Yellow, Green } value;
+        node transition; // 状态转换逻辑
+    }
+}
+
+// 安全状态机定义
+class SafeStateMachine {
+    have {
+        State current_state;
+        num duration;
+        Option<Error> last_error;
+        node process_tick;
+    }
+
+    born {
+        current_state = State.Red;
+        duration = 0;
+    }
+}
+
+// 状态转换逻辑实现
+node State.transition {
+    in {num elapsed_time}
+    out {State}
+    action {
+        duration = duration + elapsed_time
+        
+        match value {
+            case Value.Red: 
+            +> {
+                if (duration >= 60)
+                +> {
+                    duration = 0
+                    return State.Green
+                }
+            }
+            case Value.Green: 
+            +> {
+                if (duration >= 45)
+                +> {
+                    duration = 0
+                    return State.Yellow
+                }
+            }
+            case Value.Yellow: 
+            +> {
+                if (duration >= 5)
+                +> {
+                    duration = 0
+                    return State.Red
+                }
+            }
+        }
+        // 想设计成支持无return，通过out明确返回
+        return current_state
+    }
+}
+
+// 图流控制器
+graph traffic_controller {
+    entry (initialize)
+
+    node initialize {
+        action {
+            machine = new SafeStateMachine()
+        }
+        next run_loop
+    }
+
+    node run_loop {
+        born {num total_time = 0}
+        condition (total_time < 180)
+        action {
+            result = machine.process_tick(1)
+            
+            match result {
+                case Ok(state): 
+                +> {
+                    display_state(state)
+                    total_time = total_time + 1
+                }
+                case Err(error): 
+                +> {
+                    handle_error(error)
+                    break
+                }
+            }
+        }
+    }
+}
+
+// 安全处理节点
+node SafeStateMachine.process_tick {
+    in {num delta}
+    out {Result<State, Error>}
+    action {
+        +> {
+            if (delta <= 0) 
+            +> {
+                throw InvalidTimeError("时间增量必须为正数") }
+            
+            State new_state = current_state.transition(delta)
+            if (new_state != current_state)
+            +> {
+                current_state = new_state
+                log_state_change(new_state) }
+            
+            return Ok(current_state) }
+        -> {
+            last_error = Some(error)
+            return Err(error) }
+    }
+}
+
+// 日志记录模块
+module logger {
+    node log_state_change {
+        in {State new_state}
+        action {
+            print("状态变更: ", current_state, " -> ", new_state)
+            print("持续时间重置: ", duration)
+        }
+    }
+}
+
+// 并发处理示例
+graph parallel_processing {
+    entry (batch_processing)
+
+    node batch_processing {
+        action {
+            orders = order_queue.fetch_pending_orders(100)
+        }
+        parallel: process_orders(orders)
+        next wait_all_orders
+    }
+
+    node process_orders {
+        in {Order[] batch}
+        action {
+            batch.into_iter()
+            .map(|order| {
+                run graph order_fulfillment with {order: order}
+            })
+            .collect()
+        }
+    }
+
+    node wait_all_orders {
+        wait_all: [process_orders]
+        action {
+            stats = analyze_results()
+            generate_report(stats.success_count, stats.failure_count)
+        }
+    }
+}
+
+// 泛型容器示例
+class Vector<T> {
+    have {
+        T[] data;
+        num size;
+        num capacity;
+    }
+
+    node put {
+        in {T the_data}
+        out {void}
+        action {
+            if (size >= capacity)
+            +> {
+                resize()
+            }
+            data[size] = the_data
+            size = size + 1
+        }
+    }
+
+    private node resize {
+        action {
+            new_capacity = capacity * 2
+            new_data = new T[new_capacity]
+            data.copy_to(new_data)
+            data = new_data
+            capacity = new_capacity
+        }
+    }
+}
+
+// 资源管理示例
+class ResourceGuard {
+    have {
+        void* handle;
+        node release;
+    }
+
+    born {
+        handle = acquire_resource()
+    }
+
+    on drop {
+        if (handle != null)
+        +> {
+            release(handle)
+        }
+    }
+}
