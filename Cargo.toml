@@ -4,6 +4,3 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-egui = { git = "https://github.com/emilk/egui.git" }
-wgpu = { git = "https://github.com/gfx-rs/wgpu.git" }
-sea-orm = { git = "https://github.com/SeaQL/sea-orm.git" }
