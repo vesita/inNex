@@ -1,3 +1,3 @@
 pub mod fast;
-pub mod group;
+pub mod pano;
 pub mod travel;

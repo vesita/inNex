@@ -39,3 +39,27 @@ pub fn nomore_tar<T: Ord>(arr: &[T], target: T) -> Option<usize> {
     }
     best_index
 }
+
+pub fn noless_tar<T: Ord>(arr: &[T], target: T) -> Option<usize> {
+    let mut left = 0;
+    let mut right = arr.len() - 1;
+    let mut best_index = None;
+
+    while left <= right {
+        let mid = left + (right - left) / 2;
+
+        match arr[mid].cmp(&target) {
+            std::cmp::Ordering::Less => {
+                left = mid + 1;
+            }
+            std::cmp::Ordering::Greater => {
+                best_index = Some(mid);
+                right = mid - 1;
+            }
+            std::cmp::Ordering::Equal => {
+                return Some(mid);
+            }
+        }
+    }
+    best_index
+}
